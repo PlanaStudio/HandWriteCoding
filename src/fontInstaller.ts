@@ -443,7 +443,14 @@ export async function installFromUrlCommand(): Promise<string | undefined> {
 }
 
 export function restartVsCode(): void {
+  // Try a quick window reload first (works for font family changes)
+  vscode.commands.executeCommand('workbench.action.reloadWindow');
+}
+
+export function hardRestartVsCode(): void {
   if (process.platform === 'win32') {
+    // Find the VS Code executable reliably from the current process path
+    const exePath = process.execPath;
     const child = spawn(
       'powershell.exe',
       [
@@ -451,7 +458,7 @@ export function restartVsCode(): void {
         '-WindowStyle',
         'Hidden',
         '-Command',
-        `$proc = Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue; if ($proc) { $proc.WaitForExit(10000) }; Start-Sleep -Milliseconds 800; Start-Process '${process.execPath}'`
+        `Start-Sleep -Milliseconds 1500; Start-Process '${exePath.replace(/'/g, "''")}'`
       ],
       {
         detached: true,
@@ -482,19 +489,19 @@ async function applyEditorFont(family: string, isNewInstall: boolean = false) {
 
   if (isNewInstall) {
     const choice = await vscode.window.showInformationMessage(
-      `Installed ${family}! A restart of VS Code is required to load the new font into the editor. Restart now?`,
-      'Restart Now',
+      `Installed ${family}! Reload window to apply the new font?`,
+      'Reload Now',
       'Later'
     );
-    if (choice === 'Restart Now') {
+    if (choice === 'Reload Now') {
       restartVsCode();
     }
   } else {
     const choice = await vscode.window.showInformationMessage(
-      `Font set to: ${family}. If the font does not display immediately, restart VS Code.`,
-      'Restart VS Code'
+      `Font set to: ${family}. Reload window if it doesn't appear immediately.`,
+      'Reload Window'
     );
-    if (choice === 'Restart VS Code') {
+    if (choice === 'Reload Window') {
       restartVsCode();
     }
   }
