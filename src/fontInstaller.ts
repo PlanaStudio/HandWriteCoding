@@ -3,10 +3,10 @@ import * as https from 'https';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 
-const FONTS_DIR = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts');
-const REG_KEY = 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts';
+const FONTS_DIR = path.join(process.env.LOCALAPPDATA || (process.env.USERPROFILE + '\\AppData\\Local'), 'Microsoft', 'Windows', 'Fonts');
+const REG_KEY = 'HKCU\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts';
 
 const FONT_PS_SCRIPT = `param([string]$Action, [string]$FontPath)
 Add-Type -MemberDefinition '[DllImport("gdi32.dll")]public static extern int AddFontResource(string f);[DllImport("gdi32.dll")]public static extern int RemoveFontResource(string f);[DllImport("user32.dll")]public static extern int SendMessage(int h,int m,int w,int l);' -Name FontSwitcherUtil -Namespace FontSwitcher
@@ -226,7 +226,7 @@ export async function isFontInstalled(family: string): Promise<boolean> {
 
 async function confirmSystemFontInstall(family: string): Promise<boolean> {
   const choice = await vscode.window.showWarningMessage(
-    `Install "${family}" into C:\\Windows\\Fonts and update the system font registry?`,
+    `Install "${family}" for the current user and update the font registry?`,
     { modal: true },
     'Install',
     'Cancel'
@@ -299,7 +299,7 @@ export async function installGoogleFont(family: string): Promise<void> {
       }
       const dest = fontFilePath(family);
       await downloadFile(usableUrl, dest);
-      await regAddValue(`${family} (TrueType)`, path.basename(dest));
+      await regAddValue(`${family} (TrueType)`, dest);
       await runSessionFontCommand('Add', dest);
       if (!(await isFontInstalled(family))) {
         throw new Error(`Windows did not register ${family}`);
@@ -340,7 +340,7 @@ async function installFontFileToSystem(fontPath: string): Promise<string> {
   fs.copyFileSync(fontPath, dest);
 
   const familyName = sanitizeFontName(path.basename(fontPath, ext));
-  await regAddValue(`${familyName} (TrueType)`, fileName);
+  await regAddValue(`${familyName} (TrueType)`, dest);
   await runSessionFontCommand('Add', dest);
   if (!(await isFontInstalled(familyName))) {
     throw new Error(`Windows did not register ${familyName}`);
@@ -383,7 +383,7 @@ async function installFontFromUrlValue(rawValue: string): Promise<string> {
   const normalizedFamily = sanitizeFontName(familyName);
   const dest = fontFilePath(normalizedFamily);
   await downloadFile(usableUrl, dest);
-  await regAddValue(`${normalizedFamily} (TrueType)`, path.basename(dest));
+  await regAddValue(`${normalizedFamily} (TrueType)`, dest);
   await runSessionFontCommand('Add', dest);
   if (!(await isFontInstalled(normalizedFamily))) {
     throw new Error(`Windows did not register ${normalizedFamily}`);
@@ -410,8 +410,7 @@ export async function installFromFileCommand(): Promise<string | undefined> {
       return undefined;
     }
     const familyName = await installFontFileToSystem(file[0].fsPath);
-    await applyEditorFont(familyName);
-    vscode.window.showInformationMessage(`Installed font: ${familyName}`);
+    await applyEditorFont(familyName, true);
     return familyName;
   } catch (e: unknown) {
     const detail = e instanceof Error ? e.message : String(e);
@@ -434,8 +433,7 @@ export async function installFromUrlCommand(): Promise<string | undefined> {
       return undefined;
     }
     const familyName = await installFontFromUrlValue(input);
-    await applyEditorFont(familyName);
-    vscode.window.showInformationMessage(`Installed font: ${familyName}`);
+    await applyEditorFont(familyName, true);
     return familyName;
   } catch (e: unknown) {
     const detail = e instanceof Error ? e.message : String(e);
@@ -444,18 +442,62 @@ export async function installFromUrlCommand(): Promise<string | undefined> {
   }
 }
 
-async function applyEditorFont(family: string) {
+export function restartVsCode(): void {
+  if (process.platform === 'win32') {
+    const child = spawn(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-WindowStyle',
+        'Hidden',
+        '-Command',
+        `$proc = Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue; if ($proc) { $proc.WaitForExit(10000) }; Start-Sleep -Milliseconds 800; Start-Process '${process.execPath}'`
+      ],
+      {
+        detached: true,
+        stdio: 'ignore'
+      }
+    );
+    child.unref();
+  }
+  vscode.commands.executeCommand('workbench.action.quit');
+}
+
+async function applyEditorFont(family: string, isNewInstall: boolean = false) {
   const editorConfig = vscode.workspace.getConfiguration('editor');
-  const fontSetting = editorConfig.inspect('fontFamily');
+  const terminalConfig = vscode.workspace.getConfiguration('terminal.integrated');
+  
+  const fontSetting = editorConfig.inspect<string>('fontFamily');
   const target = fontSetting && fontSetting.workspaceValue !== undefined
     ? vscode.ConfigurationTarget.Workspace
     : vscode.ConfigurationTarget.Global;
 
+  const terminalFont = terminalConfig.inspect<string>('fontFamily');
+  if (!terminalFont?.globalValue && !terminalFont?.workspaceValue) {
+    const defaultFont = "Consolas, 'Courier New', monospace";
+    await terminalConfig.update('fontFamily', defaultFont, vscode.ConfigurationTarget.Global);
+  }
+
   await editorConfig.update('fontFamily', `'${family}', monospace`, target);
 
-  setTimeout(() => {
-    vscode.commands.executeCommand('workbench.action.reloadWindow');
-  }, 400);
+  if (isNewInstall) {
+    const choice = await vscode.window.showInformationMessage(
+      `Installed ${family}! A restart of VS Code is required to load the new font into the editor. Restart now?`,
+      'Restart Now',
+      'Later'
+    );
+    if (choice === 'Restart Now') {
+      restartVsCode();
+    }
+  } else {
+    const choice = await vscode.window.showInformationMessage(
+      `Font set to: ${family}. If the font does not display immediately, restart VS Code.`,
+      'Restart VS Code'
+    );
+    if (choice === 'Restart VS Code') {
+      restartVsCode();
+    }
+  }
 }
 
 export async function applyGoogleFont(family: string): Promise<void> {
@@ -465,26 +507,16 @@ export async function applyGoogleFont(family: string): Promise<void> {
         return;
       }
       await installGoogleFont(family);
-      await applyEditorFont(family);
-      vscode.window.showInformationMessage(`Installed ${family} — reloading to apply it...`);
+      await applyEditorFont(family, true);
       return;
     }
   } catch (e: unknown) {
     const detail = e instanceof Error ? e.message : String(e);
-    const action = await vscode.window.showErrorMessage(
-      `Could not install ${family}: ${detail}`,
-      'Run VS Code as Administrator'
-    );
-    if (action === 'Run VS Code as Administrator') {
-      vscode.window.showInformationMessage(
-        'Close VS Code, right-click it, choose "Run as administrator", then start the extension again.'
-      );
-    }
+    await vscode.window.showErrorMessage(`Could not install ${family}: ${detail}`);
     return;
   }
   for (const existing of findInstalledFontFiles(family)) {
     await runSessionFontCommand('Add', existing);
   }
-  await applyEditorFont(family);
-  vscode.window.showInformationMessage(`Font: ${family}`);
+  await applyEditorFont(family, false);
 }

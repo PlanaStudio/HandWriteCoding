@@ -7,6 +7,7 @@
   var currentFilter = 'handwriting';
   var searchQuery = '';
   var PREVIEW_TEXT = 'Hamburgevons 123';
+  var sizeTimeout = null;
 
   function setInstalled(list) {
     installed = {};
@@ -112,6 +113,24 @@
     });
   }
 
+  var sizeSlider = document.getElementById('sizeSlider');
+  var sizeInput = document.getElementById('sizeInput');
+
+  function applySizeUI(val) {
+    var n = parseInt(val, 10);
+    if (isNaN(n) || n < 6 || n > 72) { return; }
+    sizeSlider.value = n;
+    sizeInput.value = n;
+    clearTimeout(sizeTimeout);
+    sizeTimeout = setTimeout(function () {
+      vscode.postMessage({ type: 'setFontSize', size: n });
+    }, 300);
+  }
+
+  sizeSlider.addEventListener('input', function () { applySizeUI(this.value); });
+  sizeInput.addEventListener('input', function () { applySizeUI(this.value); });
+  sizeInput.addEventListener('change', function () { applySizeUI(this.value); });
+
   window.addEventListener('message', function (event) {
     var msg = event.data;
     if (msg.type === 'init') {
@@ -119,6 +138,7 @@
       categories = msg.categories;
       currentFont = msg.currentFont || '';
       setInstalled(msg.installed);
+      if (msg.fontSize) { sizeSlider.value = msg.fontSize; sizeInput.value = msg.fontSize; }
       renderFonts();
     } else if (msg.type === 'installed') {
       if (msg.fonts) {
@@ -127,11 +147,15 @@
       }
       currentFont = msg.currentFont || currentFont;
       setInstalled(msg.installed);
+      if (msg.fontSize) { sizeSlider.value = msg.fontSize; sizeInput.value = msg.fontSize; }
       renderFonts();
     } else if (msg.type === 'applied') {
       var status = document.getElementById('status');
           status.textContent = 'Applied: ' + msg.font;
       status.className = 'status ok';
+    } else if (msg.type === 'fontSizeApplied') {
+      sizeSlider.value = msg.size;
+      sizeInput.value = msg.size;
     }
   });
 

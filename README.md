@@ -5,11 +5,13 @@ A VS Code extension that lets you transform your editor into a handwritten, crea
 ## Features
 
 - Switch the editor to handwritten fonts such as Caveat, Kalam, Indie Flower, and more
+- **No Admin Rights Required**: Installs fonts cleanly to the current user's `%LOCALAPPDATA%` folder
+- **Terminal Isolation**: Keeps the Integrated Terminal readable with a monospace font while the editor uses your chosen handwriting font
 - Browse a curated list of handwriting and monospace fonts
 - Install fonts from Google Fonts or a custom font URL
 - Install fonts from a local `.ttf` or `.otf` file
 - Apply the chosen font directly to the VS Code editor
-- Reload the editor automatically after applying a font
+- **Seamless Auto-Restart**: Reliably restarts VS Code without losing your workspace so newly installed fonts take effect immediately
 - Reset the editor font back to default
 
 ## Screenshot
@@ -53,16 +55,15 @@ This creates a `.vsix` package that can be installed manually or published to th
 - `Font Switcher: Previous Font`
 - `Font Switcher: Pick Font`
 - `Font Switcher: Reset to Default`
+- `Font Switcher: Restart VS Code`
 - `Font Switcher: Install Font from File`
-- `Font Switcher: Install Font from Google Fonts URL`
+- `Font Switcher: Install Font from URL`
 
 ## Configuration
 
 You can configure default values in the VS Code settings:
 
 - `fontSwitcher.fonts`
-- `fontSwitcher.fontSize`
-- `fontSwitcher.fontWeight`
 
 Example:
 
@@ -72,20 +73,18 @@ Example:
   "Kalam",
   "Shadows Into Light",
   "Permanent Marker"
-],
-"fontSwitcher.fontSize": 14,
-"fontSwitcher.fontWeight": "normal"
+]
 ```
 
 ## Notes
 
-- The extension is designed primarily for Windows, because it installs fonts directly into the Windows font system.
-- Some fonts may require a VS Code reload to fully appear in the editor.
+- The extension is designed primarily for Windows, as it seamlessly integrates with the Windows user-level font registry.
+- A seamless VS Code restart is required after installing a brand new font. The extension handles this automatically.
 - For custom fonts, use a valid `.ttf` or `.otf` file.
 
 ## License
 
-MIT - LICENSE
+MIT
 
 ## Contributing
 

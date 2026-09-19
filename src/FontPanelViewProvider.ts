@@ -71,6 +71,10 @@ export class FontPanelViewProvider implements vscode.WebviewViewProvider {
     return (match?.[1] || match?.[2] || value.split(',')[0]).trim() || undefined;
   }
 
+  private getCurrentFontSize(): number {
+    return vscode.workspace.getConfiguration('editor').get<number>('fontSize', 14);
+  }
+
   private async rememberCustomFont(font: string) {
     this._customFonts[font] = 'custom';
     await this._context.globalState.update('customFonts', Object.keys(this._customFonts));
@@ -99,6 +103,7 @@ export class FontPanelViewProvider implements vscode.WebviewViewProvider {
           categories: fonts,
           installed: getInstalledFontNames(Object.keys(fonts)),
           currentFont: this.getCurrentFont(),
+          fontSize: this.getCurrentFontSize(),
         });
         return;
       }
@@ -160,6 +165,20 @@ export class FontPanelViewProvider implements vscode.WebviewViewProvider {
         await applyGoogleFont(message.font);
         this._view?.webview.postMessage({ type: 'applied', font: message.font });
         this.postInstalled();
+        return;
+      }
+      if (message.type === 'setFontSize') {
+        const size = Number(message.size);
+        if (!isNaN(size) && size >= 6 && size <= 72) {
+          const editorConfig = vscode.workspace.getConfiguration('editor');
+          const inspected = editorConfig.inspect('fontSize');
+          const target = inspected?.workspaceValue !== undefined
+            ? vscode.ConfigurationTarget.Workspace
+            : vscode.ConfigurationTarget.Global;
+          await editorConfig.update('fontSize', size, target);
+          this._view?.webview.postMessage({ type: 'fontSizeApplied', size });
+        }
+        return;
       }
     });
   }
@@ -176,6 +195,7 @@ export class FontPanelViewProvider implements vscode.WebviewViewProvider {
       categories: fonts,
       installed: getInstalledFontNames(Object.keys(fonts)),
       currentFont: this.getCurrentFont(),
+      fontSize: this.getCurrentFontSize(),
     });
   }
 
@@ -260,6 +280,41 @@ export class FontPanelViewProvider implements vscode.WebviewViewProvider {
     .status.ok {
       color: #73c991;
     }
+    .size-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      padding: 6px 10px;
+      border: 1px solid var(--vscode-input-border, transparent);
+      border-radius: 4px;
+      background: var(--vscode-input-background);
+    }
+    .size-label {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .size-slider {
+      flex: 1;
+      accent-color: var(--vscode-button-background);
+      cursor: pointer;
+      height: 4px;
+    }
+    .size-input {
+      width: 44px;
+      padding: 2px 6px;
+      border: 1px solid var(--vscode-input-border, transparent);
+      border-radius: 3px;
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      font-size: 12px;
+      text-align: center;
+      outline: none;
+      flex-shrink: 0;
+    }
+    .size-input:focus { border-color: var(--vscode-focusBorder); }
     .toolbar {
       display: flex;
       gap: 6px;
@@ -374,6 +429,11 @@ export class FontPanelViewProvider implements vscode.WebviewViewProvider {
       <button class="filter-btn" data-filter="all">All</button>
       <button class="filter-btn active" data-filter="handwriting">Handwriting</button>
       <button class="filter-btn" data-filter="monospace">Mono</button>
+    </div>
+    <div class="size-control">
+      <span class="size-label">Size</span>
+      <input type="range" class="size-slider" id="sizeSlider" min="6" max="72" step="1" value="14">
+      <input type="number" class="size-input" id="sizeInput" min="6" max="72" value="14">
     </div>
     <div class="toolbar">
       <button class="action-btn" id="installFileBtn">Install from file</button>
