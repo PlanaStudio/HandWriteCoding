@@ -4,6 +4,7 @@
   "description": "Render your code in handwriting-style Google Fonts, like the viral handwritten code look",
   "version": "0.1.0",
   "publisher": "your-publisher-name",
+  "icon": "images/icon.svg",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -19,7 +20,7 @@
         {
           "id": "fontSwitcher",
           "title": "Font Switcher",
-          "icon": "$(symbol-text)"
+          "icon": "images/icon.svg"
         }
       ]
     },
